@@ -76,6 +76,10 @@ impl Notebook {
         Ok(id)
     }
 
+    pub fn clear(&mut self) {
+        self.items.clear();
+    }
+
     pub fn remove(&mut self, id: u64) -> Result<()> {
         let index = self.items.iter().position(|item| item.id == id);
         match index {

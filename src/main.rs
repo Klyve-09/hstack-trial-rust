@@ -1,6 +1,9 @@
 mod storage;
 
-use std::path::PathBuf;
+use std::{
+    io::{self, Write},
+    path::{Path, PathBuf},
+};
 
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
@@ -31,6 +34,8 @@ enum Command {
     Show { id: u64 },
     /// Permanently remove an item
     Remove { id: u64 },
+    /// Permanently remove all saved items after confirmation
+    Clear,
 }
 
 fn main() -> Result<()> {
@@ -67,11 +72,38 @@ fn main() -> Result<()> {
                 println!("\n{}", item.body);
             }
         }
+        Command::Clear => clear_items(&mut notebook, &path)?,
         Command::Remove { id } => {
             notebook.remove(id)?;
             notebook.save(&path)?;
             println!("Removed item {id}.");
         }
+    }
+    Ok(())
+}
+
+fn clear_items(notebook: &mut Notebook, path: &Path) -> Result<()> {
+    let count = notebook.items().len();
+    if count == 0 {
+        println!("No items to remove.");
+        return Ok(());
+    }
+
+    println!("This will permanently remove all {count} items.");
+    print!("Are you sure? [y/N] ");
+    io::stdout().flush()?;
+    let mut answer = String::new();
+    io::stdin().read_line(&mut answer)?;
+    if !matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+        println!("Cancelled. No items removed.");
+        return Ok(());
+    }
+
+    println!("Removing {count} items...");
+    notebook.clear();
+    match notebook.save(path) {
+        Ok(()) => println!("Removed {count} items."),
+        Err(error) => eprintln!("Could not clear items: {error:#}"),
     }
     Ok(())
 }

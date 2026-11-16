@@ -19,12 +19,17 @@ items add "Books to read" --body "The Left Hand of Darkness"
 items list
 items show 1
 items remove 1
+items clear
 items --help
 ```
 
 Titles must contain non-whitespace text and fit on one line. Bodies can contain
 multiple lines. IDs start at 1 and are not reused after deletion. Listing shows
 IDs and titles in creation order; `show` also displays the body. Removal is permanent.
+Use `items clear` to remove every saved item at once. It asks for confirmation;
+enter `y` or `yes` to continue, or press Enter to cancel. Clearing keeps the ID
+sequence, so newly added items still receive fresh IDs.
+
 Errors go to stderr with a nonzero exit status.
 
 ## Local data

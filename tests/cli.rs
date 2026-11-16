@@ -62,3 +62,26 @@ fn corrupt_file_is_not_overwritten() {
     assert!(String::from_utf8_lossy(&output.get_output().stderr).contains("Invalid JSON"));
     assert_eq!(std::fs::read_to_string(path).unwrap(), "not json");
 }
+
+#[test]
+fn clear_removes_all_items_and_preserves_id_sequence() {
+    let dir = tempfile::tempdir().unwrap();
+    for title in ["First", "Second", "Third"] {
+        items(dir.path()).args(["add", title]).assert().success();
+    }
+    items(dir.path())
+        .arg("clear")
+        .write_stdin("yes\n")
+        .assert()
+        .success();
+    items(dir.path())
+        .arg("list")
+        .assert()
+        .success()
+        .stdout("No items yet. Use 'items add <title>' to save one.\n");
+    items(dir.path())
+        .args(["add", "Next"])
+        .assert()
+        .success()
+        .stdout("Added item 4.\n");
+}
