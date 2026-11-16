@@ -17,6 +17,7 @@ cargo install --path . --locked
 ```sh
 items add "Books to read" --body "The Left Hand of Darkness"
 items list
+items list --json
 items show 1
 items remove 1
 items --help
@@ -25,7 +26,9 @@ items --help
 Titles must contain non-whitespace text and fit on one line. Bodies can contain
 multiple lines. IDs start at 1 and are not reused after deletion. Listing shows
 IDs and titles in creation order; `show` also displays the body. Removal is permanent.
-Errors go to stderr with a nonzero exit status.
+For scripts, `list --json` prints a JSON array of objects with `id`, `title`, and
+`body`, or `[]` when empty.
+Errors go to stderr with exit status 1; usage errors exit with status 2.
 
 ## Local data
 
