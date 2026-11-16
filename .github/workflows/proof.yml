@@ -1,0 +1,122 @@
+name: Proof
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  proof:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        run: |
+          rustup update stable
+          rustup default stable
+          rustup component add clippy rustfmt
+      - name: build
+        run: cargo build --release --locked
+      - name: test
+        run: cargo test --locked
+      - name: clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+      - name: fmt
+        run: cargo fmt --check
+
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      test-macos: ${{ steps.match.outputs.test-macos }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: match
+        name: Match changed paths against Coverage
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.event.after }}
+        run: |
+          python3 - <<'PY'
+          import os, re, subprocess
+
+          checks = ["test-macos"]
+          out = open(os.environ["GITHUB_OUTPUT"], "a")
+
+          def emit(values):
+              for check in checks:
+                  out.write(f"{check}={'true' if values.get(check, True) else 'false'}\n")
+
+          def changed_paths():
+              event = os.environ["EVENT"]
+              if event == "pull_request":
+                  base, head = os.environ["PR_BASE"], os.environ["PR_HEAD"]
+              elif event == "push":
+                  base, head = os.environ["PUSH_BEFORE"], os.environ["PUSH_AFTER"]
+              else:
+                  return None
+              if not base or not head or set(base) == {"0"}:
+                  return None
+              result = subprocess.run(["git", "diff", "--name-only", "--no-renames", base, head],
+                                      capture_output=True, text=True)
+              if result.returncode != 0:
+                  return None
+              return [line for line in result.stdout.splitlines() if line]
+
+          def to_regex(pattern):
+              parts, i = [], 0
+              while i < len(pattern):
+                  if pattern.startswith("**/", i):
+                      parts.append("(?:.*/)?")
+                      i += 3
+                  elif pattern.startswith("**", i):
+                      parts.append(".*")
+                      i += 2
+                  elif pattern[i] == "*":
+                      parts.append("[^/]*")
+                      i += 1
+                  else:
+                      parts.append(re.escape(pattern[i]))
+                      i += 1
+              return re.compile("".join(parts) + r"\Z")
+
+          try:
+              paths = changed_paths()
+              if paths is None:
+                  emit({})
+              else:
+                  line_re = re.compile(r"^- `([^`]+)`: `([^`]+)`$")
+                  patterns = {check: [] for check in checks}
+                  with open("docs/agents/proof.md") as proof:
+                      for line in proof:
+                          m = line_re.match(line.rstrip("\n"))
+                          if m and m.group(1) in patterns:
+                              patterns[m.group(1)].append(to_regex(m.group(2)))
+                  emit({check: (not patterns[check]) or any(rx.match(p) for rx in patterns[check] for p in paths)
+                        for check in checks})
+          except Exception:
+              emit({})
+          PY
+
+  test-macos:
+    name: test-macos
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.test-macos == 'true') }}
+    runs-on: macos-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust toolchain
+        run: |
+          rustup update stable
+          rustup default stable
+      - name: test-macos
+        run: cargo test --locked
