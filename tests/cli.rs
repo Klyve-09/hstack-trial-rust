@@ -9,6 +9,68 @@ fn items(data_dir: &Path) -> Command {
 }
 
 #[test]
+fn json_list_contains_saved_items() {
+    let dir = tempfile::tempdir().unwrap();
+    items(dir.path())
+        .args(["add", "Say \"hi\"", "--body", "Milk\n사과"])
+        .assert()
+        .code(0);
+    items(dir.path()).args(["add", "Next"]).assert().code(0);
+    let output = items(dir.path())
+        .args(["list", "--json"])
+        .assert()
+        .code(0)
+        .stderr("");
+    let stdout = &output.get_output().stdout;
+    let value: serde_json::Value = serde_json::from_slice(stdout).unwrap();
+    assert_eq!(
+        value,
+        serde_json::json!([
+            {"id": 1, "title": "Say \"hi\"", "body": "Milk\n사과"},
+            {"id": 2, "title": "Next", "body": ""}
+        ])
+    );
+    assert!(stdout.ends_with(b"\n"));
+    assert_eq!(stdout.iter().filter(|&&byte| byte == b'\n').count(), 1);
+}
+
+#[test]
+fn json_list_is_empty() {
+    let dir = tempfile::tempdir().unwrap();
+    items(dir.path())
+        .args(["list", "--json"])
+        .assert()
+        .code(0)
+        .stdout("[]\n")
+        .stderr("");
+}
+
+#[test]
+fn list_rejects_unknown_options() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = items(dir.path())
+        .args(["list", "--bogus"])
+        .assert()
+        .code(2)
+        .stdout("");
+    let stderr = String::from_utf8_lossy(&output.get_output().stderr);
+    assert!(stderr.contains("unexpected argument '--bogus'"));
+    assert!(stderr.contains("--help"));
+}
+
+#[test]
+fn json_list_reports_corrupt_data() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("items.json"), "not json").unwrap();
+    let output = items(dir.path())
+        .args(["list", "--json"])
+        .assert()
+        .code(1)
+        .stdout("");
+    assert!(String::from_utf8_lossy(&output.get_output().stderr).contains("Invalid JSON"));
+}
+
+#[test]
 fn notebook_lifecycle_across_processes() {
     let dir = tempfile::tempdir().unwrap();
     items(dir.path())

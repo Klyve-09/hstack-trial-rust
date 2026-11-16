@@ -1,6 +1,6 @@
 mod storage;
 
-use std::path::PathBuf;
+use std::{io::Write, path::PathBuf};
 
 use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
@@ -26,7 +26,11 @@ enum Command {
         body: String,
     },
     /// List saved items, oldest first
-    List,
+    List {
+        /// Print items as a JSON array
+        #[arg(long)]
+        json: bool,
+    },
     /// Read an item
     Show { id: u64 },
     /// Permanently remove an item
@@ -50,12 +54,18 @@ fn main() -> Result<()> {
             notebook.save(&path)?;
             println!("Added item {id}.");
         }
-        Command::List => {
-            if notebook.items().is_empty() {
-                println!("No items yet. Use 'items add <title>' to save one.");
-            }
-            for item in notebook.items() {
-                println!("{}  {}", item.id, item.title);
+        Command::List { json } => {
+            if json {
+                let mut stdout = std::io::stdout().lock();
+                writeln!(stdout, "{}", serde_json::to_string(notebook.items())?)?;
+                stdout.flush()?;
+            } else {
+                if notebook.items().is_empty() {
+                    println!("No items yet. Use 'items add <title>' to save one.");
+                }
+                for item in notebook.items() {
+                    println!("{}  {}", item.id, item.title);
+                }
             }
         }
         Command::Show { id } => {
