@@ -65,7 +65,7 @@ jobs:
                   return None
               if not base or not head or set(base) == {"0"}:
                   return None
-              result = subprocess.run(["git", "diff", "--name-only", base, head],
+              result = subprocess.run(["git", "diff", "--name-only", "--no-renames", base, head],
                                       capture_output=True, text=True)
               if result.returncode != 0:
                   return None
